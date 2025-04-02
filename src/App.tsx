@@ -1,6 +1,6 @@
-import React from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { ThemeProvider, createTheme, CircularProgress, Box } from '@mui/material';
 import { Layout } from './components/Layout';
 import { LocationsPage } from './pages/LocationsPage';
 import { TransportationsPage } from './pages/TransportationsPage';
@@ -29,6 +29,24 @@ function RequireAdmin({ children }: { children: JSX.Element }) {
 }
 
 function App() {
+  const { user, loading, error, fetchUser } = useAuthStore();
+  
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+  
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  
+  if (error) {
+    console.error('Authentication error:', error);
+  }
+  
   return (
     <ThemeProvider theme={theme}>
       <BrowserRouter>

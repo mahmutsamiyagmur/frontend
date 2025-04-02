@@ -1,18 +1,23 @@
 export interface Location {
-  id: string;
+  id: number;
   name: string;
-  address: string;
+  country: string;
+  city: string;
+  locationCode: string;
 }
 
 export interface Transportation {
-  id: string;
-  name: string;
-  type: 'bus' | 'train' | 'plane';
-  capacity: number;
+  id: number;
+  originLocationId: number;
+  originLocationCode: string;
+  destinationLocationId: number;
+  destinationLocationCode: string;
+  transportationType: 'UBER' | 'BUS' | 'FLIGHT' | 'SUBWAY';
+  operatingDays: number[];
 }
 
 export interface Route {
-  id: string;
+  id: number;
   origin: Location;
   destination: Location;
   transportation: Transportation;
@@ -22,6 +27,7 @@ export interface Route {
 }
 
 export interface User {
-  id: string;
-  role: 'admin' | 'user';
+  id: number;
+  role: 'admin' | 'agency';
+  name?: string;
 }

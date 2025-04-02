@@ -3,6 +3,7 @@ import { Box, CssBaseline, Drawer, AppBar, Toolbar, Typography, List, ListItem, 
 import { Menu as MenuIcon, MapPin, Bus, Route as RouteIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { AuthSection } from './AuthSection';
 
 const drawerWidth = 240;
 
@@ -15,11 +16,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
 
+  // Role-based menu items
   const menuItems = [
+    // Locations and Transportations only visible to admins
     ...(user?.role === 'admin' ? [
       { text: 'Locations', icon: <MapPin />, path: '/locations' },
       { text: 'Transportations', icon: <Bus />, path: '/transportations' },
     ] : []),
+    // Routes visible to everyone (admins and agencies)
     { text: 'Routes', icon: <RouteIcon />, path: '/routes' },
   ];
 
@@ -64,9 +68,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Travel Management System
           </Typography>
+          
+          <AuthSection />
         </Toolbar>
       </AppBar>
       <Box
