@@ -1,17 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Chip, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Chip, CircularProgress, Alert, Button } from '@mui/material';
 import { Pencil, Trash } from 'lucide-react';
 import { Transportation } from '../types';
 import { getTransportations, deleteTransportation } from '../services/api';
+import { useAuthStore } from '../store/useAuthStore';
+import { useNavigate } from 'react-router-dom';
 
 export const TransportationsPage: React.FC = () => {
   const [transportations, setTransportations] = useState<Transportation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Get the current user role to determine access permissions
+  const userRole = useAuthStore(state => state.user?.role?.toLowerCase() || '');
+  const isAgency = userRole === 'agency';
+  const navigate = useNavigate();
+  
+  // Redirect to routes page or attempt to fetch data based on role
   useEffect(() => {
-    fetchTransportations();
-  }, []);
+    if (isAgency) {
+      // For agency users, we'll show an access denied message instead of redirecting
+      // This provides a better UX than an abrupt redirect
+      setError('Access Denied: Agency users do not have permission to view transportation data directly');
+      setLoading(false);
+    } else {
+      // For admin users, fetch transportation data as normal
+      fetchTransportations();
+    }
+  }, [isAgency, navigate]);
 
   const fetchTransportations = async () => {
     setLoading(true);
@@ -56,13 +72,35 @@ export const TransportationsPage: React.FC = () => {
         Transportations Management
       </Typography>
       
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {isAgency && (
+        <Paper sx={{ p: 3, mb: 3, backgroundColor: '#FFF4E5' }}>
+          <Typography variant="h6" color="error">
+            Access Restricted
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Agency users do not have direct access to transportation data. 
+            Please use the Routes page to view transportation options included with route information.
+          </Typography>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={() => navigate('/routes')}
+          >
+            Go to Routes Page
+          </Button>
+        </Paper>
+      )}
       
-      {loading ? (
+      {error && !isAgency && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      
+      {/* Conditional content based on user role and loading state */}
+      {loading && !isAgency ? (
+        // Loading spinner for admin users
         <Box display="flex" justifyContent="center" my={4}>
           <CircularProgress />
         </Box>
-      ) : (
+      ) : !isAgency ? (
+        // Transportation data table for admin users
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
@@ -77,7 +115,7 @@ export const TransportationsPage: React.FC = () => {
             <TableBody>
               {transportations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">No transportations found</TableCell>
+                  <TableCell colSpan={5} align="center">No transportations found</TableCell>
                 </TableRow>
               ) : (
                 transportations.map((transportation) => (
@@ -117,7 +155,7 @@ export const TransportationsPage: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-      )}
+      ) : null}
     </Box>
   );
 };

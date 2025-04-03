@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Box, Button, Typography, Avatar, Menu, MenuItem, IconButton } from '@mui/material';
 import { User, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { LoginModal } from './LoginModal';
+// No longer using the popup modal
 
 export const AuthSection: React.FC = () => {
   const { user, isLoggedIn, logout } = useAuthStore();
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  
+  // No modal state needed anymore
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   
   const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -67,17 +68,14 @@ export const AuthSection: React.FC = () => {
         <Button 
           variant="contained" 
           color="secondary" 
-          onClick={() => setLoginModalOpen(true)}
+          onClick={() => window.location.href = '/login'}
           sx={{ whiteSpace: 'nowrap' }}
         >
           Sign In
         </Button>
       )}
       
-      <LoginModal 
-        open={loginModalOpen} 
-        onClose={() => setLoginModalOpen(false)} 
-      />
+      {/* No modal needed */}
     </>
   );
 };

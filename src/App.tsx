@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { LocationsPage } from './pages/LocationsPage';
 import { TransportationsPage } from './pages/TransportationsPage';
 import { RoutesPage } from './pages/RoutesPage';
+import LoginPage from './pages/LoginPage';
 import { useAuthStore } from './store/useAuthStore';
 
 const theme = createTheme({
@@ -29,7 +30,7 @@ function RequireAdmin({ children }: { children: JSX.Element }) {
 }
 
 function App() {
-  const { user, loading, error, fetchUser } = useAuthStore();
+  const { user, loading, fetchUser } = useAuthStore();
   
   useEffect(() => {
     fetchUser();
@@ -43,15 +44,20 @@ function App() {
     );
   }
   
-  if (error) {
-    console.error('Authentication error:', error);
-  }
+  // Handle error silently, could display an error component in the future
   
+  // Check if user is logged in
+  const isAuthenticated = !!user;
+
   return (
     <ThemeProvider theme={theme}>
       <BrowserRouter>
-        <Layout>
-          <Routes>
+        <Routes>
+          {/* Login page outside the main layout */}
+          <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
+
+          {/* Main application routes with Layout */}
+          <Route element={<Layout />}>
             <Route path="/" element={<Navigate to="/routes" replace />} />
             <Route 
               path="/locations" 
@@ -70,8 +76,8 @@ function App() {
               } 
             />
             <Route path="/routes" element={<RoutesPage />} />
-          </Routes>
-        </Layout>
+          </Route>
+        </Routes>
       </BrowserRouter>
     </ThemeProvider>
   );

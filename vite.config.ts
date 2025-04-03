@@ -9,21 +9,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Handle direct routes to backend endpoints (preferred approach)
-      '/api/locations': {
+      // Auth login endpoint
+      '/auth/login': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/locations/, '/locations'),
-      },
-      '/api/transportations': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/transportations/, '/transportations'),
-      },
-      '/api/routes': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/routes/, '/routes'),
+        // No rewrite needed as the endpoint is already /auth/login
       },
       // Fallback for any other API routes
       '/api': {

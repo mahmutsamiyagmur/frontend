@@ -28,6 +28,8 @@ export interface Route {
 
 export interface User {
   id: number;
-  role: 'admin' | 'agency';
+  role: 'admin' | 'agency' | 'ADMIN' | 'AGENCY'; // Support both case formats
   name?: string;
+  username?: string;
+  token?: string;
 }

@@ -1,17 +1,15 @@
 import React from 'react';
 import { Box, CssBaseline, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemIcon, ListItemText, IconButton } from '@mui/material';
 import { Menu as MenuIcon, MapPin, Bus, Route as RouteIcon } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { AuthSection } from './AuthSection';
 
 const drawerWidth = 240;
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+// No longer need LayoutProps as we're using Outlet
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -113,7 +111,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         }}
       >
         <Toolbar />
-        {children}
+        <Outlet />
       </Box>
     </Box>
   );

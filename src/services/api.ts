@@ -122,3 +122,69 @@ export const getCurrentUser = async (): Promise<User> => {
 export const login = async (credentials: { username: string; password: string }): Promise<User> => {
   return ApiClient.post<User>('/api/login', credentials);
 };
+
+// Special helper methods for agency users who can't access location endpoints directly
+
+/**
+ * Get all unique locations from routes data for agency users
+ * Since agencies can't access location endpoints directly, this extracts locations from routes
+ */
+export const getLocationsFromRoutes = async (): Promise<Location[]> => {
+  try {
+    // Fetch all routes first
+    const routes = await getRoutes();
+    
+    // If no routes, return empty array
+    if (routes.length === 0) {
+      return [];
+    }
+    
+    // Create a map to track unique locations by ID
+    const locationMap = new Map<number, Location>();
+    
+    // Extract origin and destination locations from each route
+    let originCount = 0;
+    let destinationCount = 0;
+    
+    routes.forEach((route) => {
+      // Check if origin exists and has expected structure
+      if (route.origin && typeof route.origin === 'object' && 'id' in route.origin) {
+        if (!locationMap.has(route.origin.id)) {
+          locationMap.set(route.origin.id, route.origin);
+          originCount++;
+        }
+      }
+      
+      // Check if destination exists and has expected structure
+      if (route.destination && typeof route.destination === 'object' && 'id' in route.destination) {
+        if (!locationMap.has(route.destination.id)) {
+          locationMap.set(route.destination.id, route.destination);
+          destinationCount++;
+        }
+      }
+    });
+    
+    // Convert the map values to an array
+    return Array.from(locationMap.values());
+  } catch (error) {
+    throw new Error(`Failed to get locations from routes: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+/**
+ * Get a specific location by ID for agency users by searching through routes
+ * This is a fallback when agencies can't access location endpoints directly
+ */
+export const getLocationByIdForAgency = async (id: number): Promise<Location | null> => {
+  const locations = await getLocationsFromRoutes();
+  return locations.find(location => location.id === id) || null;
+};
+
+/**
+ * Get a specific location by code for agency users by searching through routes
+ * This is a fallback when agencies can't access location endpoints directly
+ */
+export const getLocationByCodeForAgency = async (code: string): Promise<Location | null> => {
+  const locations = await getLocationsFromRoutes();
+  return locations.find(location => location.locationCode === code) || null;
+};

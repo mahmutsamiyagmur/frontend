@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Drawer, CircularProgress, Alert, Divider, Chip, Stack } from '@mui/material';
+import { Box, Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, CircularProgress, Alert, Divider, Chip, Stack, IconButton } from '@mui/material';
+import { X as CloseIcon } from 'lucide-react';
 import { Plane, Car, Bus, Train, ArrowRight } from 'lucide-react';
 import { Location, Route, Transportation } from '../types';
 import { getLocations, searchRoutes, getRouteById } from '../services/api';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const RoutesPage: React.FC = () => {
   const [origin, setOrigin] = useState<string>('');
@@ -15,9 +17,15 @@ export const RoutesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [routeSegments, setRouteSegments] = useState<Transportation[][]>([]);
   
+  // Check authentication status before fetching data
+  const isAuthenticated = !!useAuthStore(state => state.token);
+  
+  // Load locations for all users once authenticated
   useEffect(() => {
-    fetchLocations();
-  }, []);
+    if (isAuthenticated) {
+      fetchLocations();
+    }
+  }, [isAuthenticated]);
   
   const fetchLocations = async () => {
     setLoading(true);
@@ -69,7 +77,6 @@ export const RoutesPage: React.FC = () => {
       }
       setError(null);
     } catch (err) {
-      console.error('Search error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch routes');
       setRoutes([]);
       setRouteSegments([]);
@@ -300,46 +307,46 @@ export const RoutesPage: React.FC = () => {
         </Box>
       )}
 
-      <Drawer
-        anchor="right"
-        open={!!selectedRoute}
-        onClose={() => setSelectedRoute(null)}
-        sx={{ '& .MuiDrawer-paper': { width: { xs: '100%', sm: 400 } } }}
-      >
-        {selectedRoute && (
-          <Box sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Route Details
-            </Typography>
-            <Typography variant="h6" gutterBottom>
-              {selectedRoute.origin.name} → {selectedRoute.destination.name}
-            </Typography>
-            <Typography variant="body1" paragraph>
-              Transportation: {selectedRoute.transportation.transportationType}
-              <br />
-              From {selectedRoute.transportation.originLocationCode} to {selectedRoute.transportation.destinationLocationCode}
-              <br />
-              Operating days: {selectedRoute.transportation.operatingDays.map(day => 
-                day === 1 ? 'Mon' : 
-                day === 2 ? 'Tue' : 
-                day === 3 ? 'Wed' : 
-                day === 4 ? 'Thu' : 
-                day === 5 ? 'Fri' : 
-                day === 6 ? 'Sat' : 'Sun'
-              ).join(', ')}
-            </Typography>
-            <Typography variant="body1" paragraph>
-              Departure: {new Date(selectedRoute.departureTime).toLocaleString()}
-            </Typography>
-            <Typography variant="body1" paragraph>
-              Arrival: {new Date(selectedRoute.arrivalTime).toLocaleString()}
-            </Typography>
-            <Typography variant="h6" color="primary">
-              Price: ${selectedRoute.price}
-            </Typography>
-          </Box>
-        )}
-      </Drawer>
+      {selectedRoute && (
+        <Paper sx={{ mt: 4, p: 3, position: 'relative' }}>
+          <IconButton 
+            sx={{ position: 'absolute', top: 10, right: 10 }}
+            onClick={() => setSelectedRoute(null)}
+          >
+            <CloseIcon size={20} />
+          </IconButton>
+          
+          <Typography variant="h5" gutterBottom>
+            Route Details
+          </Typography>
+          <Typography variant="h6" gutterBottom>
+            {selectedRoute.origin.name} → {selectedRoute.destination.name}
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Transportation: {selectedRoute.transportation.transportationType}
+            <br />
+            From {selectedRoute.transportation.originLocationCode} to {selectedRoute.transportation.destinationLocationCode}
+            <br />
+            Operating days: {selectedRoute.transportation.operatingDays.map(day => 
+              day === 1 ? 'Mon' : 
+              day === 2 ? 'Tue' : 
+              day === 3 ? 'Wed' : 
+              day === 4 ? 'Thu' : 
+              day === 5 ? 'Fri' : 
+              day === 6 ? 'Sat' : 'Sun'
+            ).join(', ')}
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Departure: {new Date(selectedRoute.departureTime).toLocaleString()}
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Arrival: {new Date(selectedRoute.arrivalTime).toLocaleString()}
+          </Typography>
+          <Typography variant="h6" color="primary">
+            Price: ${selectedRoute.price}
+          </Typography>
+        </Paper>
+      )}
     </Box>
   );
 };

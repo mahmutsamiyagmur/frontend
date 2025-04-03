@@ -1,20 +1,48 @@
 import { useAuthStore } from '../store/useAuthStore';
 
+/**
+ * Custom error class for authorization issues
+ */
+export class ForbiddenError extends Error {
+  status: number;
+  endpoint: string;
+  userRole: string;
+  
+  constructor(message: string, endpoint: string, userRole: string) {
+    super(message);
+    this.name = 'ForbiddenError';
+    this.status = 403;
+    this.endpoint = endpoint;
+    this.userRole = userRole;
+  }
+}
+
 // We'll consistently use /api prefix for all endpoints
 const API_URL = '/api';
 
 /**
- * Creates API request headers with authentication if a user is logged in
+ * Creates API request headers with Authentication if a user is logged in
+ * Supports both JWT Bearer tokens and Basic Auth tokens
  */
 export const getHeaders = (): HeadersInit => {
-  const user = useAuthStore.getState().user;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
   
-  // Add auth token if available
-  if (user?.id) {
-    headers['Authorization'] = `Bearer ${user.id}`;
+  // Get token from the auth store
+  const authStore = useAuthStore.getState();
+  const token = authStore.token;
+  
+  // Add authorization header if token is available
+  if (token) {
+    // Check if it's a JWT token (they typically have 2 dots for the 3 segments)
+    if (token.includes('.') && token.split('.').length === 3) {
+      // It's a JWT token, use Bearer format
+      headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Assume it's a Basic Auth token (base64 encoded)
+      headers['Authorization'] = `Basic ${token}`;
+    }
   }
   
   return headers;
@@ -29,20 +57,48 @@ class ApiClient {
    * Admins can access everything, agencies can only access route endpoints
    */
   private static checkAuthorization(endpoint: string): boolean {
-    const user = useAuthStore.getState().user;
+    const authStore = useAuthStore.getState();
+    const user = authStore.user;
+    const hasToken = !!authStore.token;
     
-    // Admins can access everything
-    if (user?.role === 'admin') {
+    // First check if we have proper authentication
+    if (!hasToken || !user) {
+      return false;
+    }
+    
+    // Get the user role and normalize it to lowercase for consistent comparison
+    const role = user.role?.toLowerCase() || '';
+    
+    // Admin users can access everything
+    if (role === 'admin') {
       return true;
     }
     
-    // Agency users can only access route endpoints
-    if (user?.role === 'agency') {
-      // Check if the endpoint is for routes
-      return endpoint.includes('/routes') || endpoint.includes('routes/');
+    // Agency users can access routes endpoints and have read-only access to locations
+    if (role === 'agency') {
+      // Check if the endpoint is related to routes (full access)
+      if (endpoint.includes('/routes')) {
+        return true;
+      }
+      
+      // Agency users always have access to locations (read-only)
+      if (endpoint.includes('/locations')) {
+        return true;
+      }
+      
+      // Agency users are not allowed to access other endpoints
+      return false;
     }
     
-    // If there's no user or role is unknown, default to no access
+    // If we have authentication but role is not recognized, allow minimal access
+    if (hasToken) {
+      // Allow access to routes and locations for any authenticated user
+      if (endpoint.includes('/routes') || endpoint.includes('/locations')) {
+        return true;
+      }
+    }
+    
+    // No known role or not authenticated, no access
     return false;
   }
   
@@ -56,56 +112,66 @@ class ApiClient {
       
       // Check if the current user is authorized to access this endpoint
       if (!this.checkAuthorization(normalizedEndpoint)) {
-        console.error(`Authorization failed: User doesn't have permission to access ${normalizedEndpoint}`);
-        throw new Error('Forbidden: You do not have permission to access this resource');
+        const authStore = useAuthStore.getState();
+        const userRole = authStore.user?.role?.toLowerCase() || 'unknown';
+        
+        // Provide a more specific error message for agency users
+        if (userRole === 'agency') {
+          if (normalizedEndpoint.includes('/locations')) {
+            // Agency users have read-only access to locations
+            // This case should not occur with our updated permission system
+            throw new ForbiddenError(
+              `Note: Agency users have read-only access to location data`, 
+              normalizedEndpoint,
+              userRole
+            );
+          }
+        }
+        
+        throw new ForbiddenError(
+          `Forbidden: ${userRole} users do not have permission to access ${normalizedEndpoint}`, 
+          normalizedEndpoint,
+          userRole
+        );
       }
       // Construct the full URL
       const queryParams = new URLSearchParams(params).toString();
       const url = `${API_URL}${normalizedEndpoint}${queryParams ? `?${queryParams}` : ''}`;
-      
-      console.log(`Making GET request to: ${url}`);
-      
-      // Add timing information for debugging
-      const startTime = performance.now();
       
       const response = await fetch(url, {
         method: 'GET',
         headers: getHeaders(),
       });
       
-      const endTime = performance.now();
-      console.log(`GET ${url} took ${(endTime - startTime).toFixed(2)}ms - Status: ${response.status} ${response.statusText}`);
-      
       if (!response.ok) {
         const errorText = await response.text();
+        
+        // Handle 403 responses specially
+        if (response.status === 403) {
+          const authStore = useAuthStore.getState();
+          const userRole = authStore.user?.role?.toLowerCase() || 'unknown';
+          throw new ForbiddenError(
+            `Server rejected access: ${userRole} users are not authorized for this operation`,
+            normalizedEndpoint,
+            userRole
+          );
+        }
+        
         throw new Error(`API error ${response.status}: ${errorText || response.statusText}`);
       }
       
-      // Clone the response for logging and further processing
+      // Clone the response for processing
       const responseClone = response.clone();
       const rawText = await responseClone.text();
       
       if (!rawText || rawText.trim() === '') {
-        console.log(`Empty response received from ${url}`);
         return {} as T; // Return empty object for empty responses
       }
       
       // Try to parse the JSON
       try {
-        console.log(`Raw response from ${url} (first 200 chars):`, 
-          rawText.length > 200 ? rawText.substring(0, 200) + '...' : rawText);
-        
-        const data = JSON.parse(rawText);
-        
-        // For debugging, log a summarized version of the data
-        if (Array.isArray(data)) {
-          console.log(`Received array with ${data.length} items from ${url}`);
-          if (data.length > 0) {
-            console.log('First item sample:', this.summarizeObject(data[0]));
-          }
-        } else if (data && typeof data === 'object') {
-          console.log('Received object response:', this.summarizeObject(data));
-        }
+        // Parse to ensure it's valid JSON, but use raw text for newResponse
+        JSON.parse(rawText);
         
         // Create a new response from the raw text
         const newResponse = new Response(rawText, {
@@ -116,44 +182,14 @@ class ApiClient {
         
         return this.handleResponse<T>(newResponse);
       } catch (parseError) {
-        console.error(`JSON parse error from ${url}:`, parseError);
-        console.error('Response that failed to parse:', rawText);
         throw new Error(`Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
       throw error;
     }
   }
   
-  // Helper method to create a summarized version of an object for logging
-  private static summarizeObject(obj: any): any {
-    if (!obj || typeof obj !== 'object') return obj;
-    
-    // For arrays, summarize the length and first item
-    if (Array.isArray(obj)) {
-      return `Array with ${obj.length} items${obj.length > 0 ? ': ' + JSON.stringify(obj[0]).substring(0, 100) : ''}`;
-    }
-    
-    // For objects, create a summary with keys and truncated values
-    const summary: Record<string, any> = {};
-    for (const key of Object.keys(obj).slice(0, 5)) { // Limit to first 5 keys
-      const value = obj[key];
-      if (typeof value === 'object' && value !== null) {
-        summary[key] = Array.isArray(value) ? `Array(${value.length})` : 'Object';
-      } else {
-        const stringValue = String(value);
-        summary[key] = stringValue.length > 40 ? stringValue.substring(0, 40) + '...' : stringValue;
-      }
-    }
-    
-    // Indicate if we truncated keys
-    if (Object.keys(obj).length > 5) {
-      summary['...'] = `${Object.keys(obj).length - 5} more keys`;
-    }
-    
-    return summary;
-  }
+  // No longer needed as we've removed console logging
   
   static async post<T>(endpoint: string, data: any): Promise<T> {
     // Ensure we're only using /api prefix endpoints
@@ -162,11 +198,8 @@ class ApiClient {
     
     // Check if the current user is authorized to access this endpoint
     if (!this.checkAuthorization(normalizedEndpoint)) {
-      console.error(`Authorization failed: User doesn't have permission to access ${normalizedEndpoint}`);
       throw new Error('Forbidden: You do not have permission to access this resource');
     }
-    
-    console.log(`Making POST request to: ${API_URL}${normalizedEndpoint}`);
     
     const response = await fetch(`${API_URL}${normalizedEndpoint}`, {
       method: 'POST',
@@ -174,7 +207,6 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     
-    console.log(`POST response status:`, response.status, response.statusText);
     return this.handleResponse<T>(response);
   }
   
@@ -185,11 +217,9 @@ class ApiClient {
     
     // Check if the current user is authorized to access this endpoint
     if (!this.checkAuthorization(normalizedEndpoint)) {
-      console.error(`Authorization failed: User doesn't have permission to access ${normalizedEndpoint}`);
       throw new Error('Forbidden: You do not have permission to access this resource');
     }
     
-    console.log(`Making PUT request to: ${API_URL}${normalizedEndpoint}`);
     
     const response = await fetch(`${API_URL}${normalizedEndpoint}`, {
       method: 'PUT',
@@ -197,7 +227,6 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     
-    console.log(`PUT response status:`, response.status, response.statusText);
     return this.handleResponse<T>(response);
   }
   
@@ -208,32 +237,21 @@ class ApiClient {
     
     // Check if the current user is authorized to access this endpoint
     if (!this.checkAuthorization(normalizedEndpoint)) {
-      console.error(`Authorization failed: User doesn't have permission to access ${normalizedEndpoint}`);
       throw new Error('Forbidden: You do not have permission to access this resource');
     }
     
-    console.log(`Making DELETE request to: ${API_URL}${normalizedEndpoint}`);
     
     const response = await fetch(`${API_URL}${normalizedEndpoint}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     
-    console.log(`DELETE response status:`, response.status, response.statusText);
     return this.handleResponse<T>(response);
   }
   
   private static async handleResponse<T>(response: Response): Promise<T> {
-    // For debugging
-    console.log(`API Response: ${response.url}`, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries([...response.headers]),
-    });
-    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('API Error Response:', errorText);
       const error = new Error(errorText || `API error: ${response.status}`);
       throw error;
     }
@@ -247,7 +265,6 @@ class ApiClient {
     const clonedResponse = response.clone();
     try {
       const data = await response.json();
-      console.log('API Response Data:', data);
       
       // Helper function to determine if an object looks like our expected type
       const hasExpectedStructure = (obj: any): boolean => {
@@ -263,7 +280,6 @@ class ApiClient {
       
       // If the data is an array, check if it matches our expected format directly
       if (Array.isArray(data)) {
-        console.log('Received array data directly');
         return data as T;
       }
       
@@ -271,7 +287,6 @@ class ApiClient {
       if (data && typeof data === 'object') {
         // Check if this is a singleton object that matches our type
         if (hasExpectedStructure(data)) {
-          console.log('Received single object, converting to array');
           // If T is expected to be an array but we got a single item
           if (Array.isArray({} as T)) {
             return [data] as unknown as T;
@@ -285,7 +300,6 @@ class ApiClient {
         for (const prop of wrapperProps) {
           if (prop in data) {
             const unwrappedData = data[prop];
-            console.log(`Extracting ${prop} from response wrapper:`, unwrappedData);
             
             // Validate the unwrapped data
             if (Array.isArray(unwrappedData)) {
@@ -310,20 +324,16 @@ class ApiClient {
         
         // Check for pagination pattern with 'content' property
         if ('content' in data && Array.isArray(data.content)) {
-          console.log('Extracting paginated content:', data.content);
           return data.content as T;
         }
       }
       
       // If we couldn't find a known structure but we have data, return it as is
-      console.log('Using response data as-is');
       return data as T;
     } catch (error) {
-      console.error('Error parsing JSON response:', error);
       // If JSON parsing fails, try to get the text response
       try {
         const textResponse = await clonedResponse.text();
-        console.log('Raw text response:', textResponse);
         if (textResponse.trim() !== '') {
           try {
             // Try parsing again, just in case
@@ -333,7 +343,6 @@ class ApiClient {
           }
         }
       } catch (textError) {
-        console.error('Error getting text response:', textError);
       }
       throw new Error(`Failed to parse API response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

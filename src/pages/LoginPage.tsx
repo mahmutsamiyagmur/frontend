@@ -1,27 +1,22 @@
 import React, { useState } from 'react';
 import { 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
+  Box, 
+  Container, 
+  Paper, 
+  Typography, 
   TextField, 
   Button, 
-  Typography, 
-  Box,
+  IconButton, 
+  InputAdornment,
   Alert,
   CircularProgress,
-  IconButton,
-  InputAdornment
+  Divider
 } from '@mui/material';
 import { Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 
-interface LoginModalProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose }) => {
+const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,12 +24,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   
   const { login } = useAuthStore();
+  const navigate = useNavigate();
   
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
-
-  const handleSubmit = async () => {
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!username.trim()) {
       setError('Username is required');
       return;
@@ -51,30 +49,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose }) => {
     try {
       // Attempt login with credentials
       await login(username, password);
-      onClose();
+      
+      // Navigate to home on success
+      navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Invalid username or password');
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Typography variant="h5" component="div" sx={{ fontWeight: 'bold' }}>
+    <Container maxWidth="sm" sx={{ mt: 8 }}>
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Typography variant="h4" component="h1" align="center" sx={{ mb: 4 }}>
           Sign In
         </Typography>
-      </DialogTitle>
-      
-      <DialogContent>
-        <Box sx={{ py: 2 }}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        
+        <form onSubmit={handleSubmit}>
           <TextField
             label="Username"
             variant="outlined"
@@ -93,7 +91,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose }) => {
             fullWidth
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            sx={{ mb: 3 }}
+            sx={{ mb: 4 }}
             disabled={loading}
             InputProps={{
               endAdornment: (
@@ -110,37 +108,34 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose }) => {
             }}
           />
           
-          <Box sx={{ mb: 2, mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Default credentials:
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              • Admin: username <strong>admin</strong> / password <strong>admin123</strong>
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              • Agency: username <strong>agency</strong> / password <strong>agency123</strong>
-            </Typography>
-          </Box>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
+            sx={{ py: 1.5 }}
+          >
+            {loading ? 'Signing In...' : 'Sign In'}
+          </Button>
+        </form>
+        
+        <Divider sx={{ my: 4 }} />
+        
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body1" fontWeight="medium" gutterBottom>
+            Default Credentials
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>Admin:</strong> username <code>admin</code> / password <code>admin123</code>
+          </Typography>
+          <Typography variant="body2">
+            <strong>Agency:</strong> username <code>agency</code> / password <code>agency123</code>
+          </Typography>
         </Box>
-      </DialogContent>
-      
-      <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button 
-          variant="outlined" 
-          onClick={onClose} 
-          disabled={loading}
-        >
-          Cancel
-        </Button>
-        <Button 
-          variant="contained" 
-          onClick={handleSubmit}
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
-        >
-          {loading ? 'Signing In...' : 'Sign In'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      </Paper>
+    </Container>
   );
 };
+
+export default LoginPage;
